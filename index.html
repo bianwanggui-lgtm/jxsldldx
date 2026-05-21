@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>江西水利电力大学转专业信息站</title>
+
+<!-- ==================== CDN 依赖 ==================== -->
+<!-- Tailwind CSS v3 -->
+<script src="https://cdn.tailwindcss.com">
+</script>
+<!-- Font Awesome 图标 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css">
+
+<!-- ==================== 自定义样式 ==================== -->
+<style>
+/* 弹窗遮罩层 */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+/* 弹窗卡片 */
+.modal-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 40px;
+    max-width: 420px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+/* 禁止滚动 */
+body.no-scroll { overflow: hidden; }
+
+/* 文件图标颜色 */
+.icon-pdf  { color: #EF4444; }
+.icon-word { color: #3B82F6; }
+.icon-excel{ color: #10B981; }
+.icon-ppt  { color: #F59E0B; }
+.icon-image{ color: #8B5CF6; }
+.icon-other{ color: #6B7280; }
+
+/* 过渡动画 */
+.fade-in { animation: fadeIn 0.25s ease; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- ==================== QQ群弹窗 ==================== -->
+<div id="qq-popup" class="modal-overlay" style="display:none;">
+    <div class="modal-card fade-in">
+        <div style="font-size:24px; font-weight:bold; color:#000; margin-bottom:8px;">
+            了解更多信息，请加入QQ群
+        </div>
+        <div style="font-size:36px; font-weight:bold; color:#165DFF; margin:20px 0;" id="qq-number-display">
+            340865393
+        </div>
+        <button id="qq-popup-close"
+                style="width:100%; height:48px; background:#165DFF; color:#fff;
+                       border:none; border-radius:8px; font-size:16px; cursor:pointer;
+                       font-weight:bold;">
+            我知道了
+        </button>
+    </div>
+</div>
+
+<!-- ==================== 管理员登录弹窗 ==================== -->
+<div id="admin-login-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal-card fade-in" style="max-width:380px;">
+        <div style="font-size:22px; font-weight:bold; color:#000; margin-bottom:24px;">
+            管理员登录
+        </div>
+        <input id="admin-password-input" type="password" placeholder="请输入管理员密码"
+               style="width:100%; padding:12px 16px; border:1px solid #d1d5db; border-radius:8px;
+                      font-size:15px; outline:none; margin-bottom:16px; box-sizing:border-box;"
+               onkeydown="if(event.key==='Enter')adminLogin();">
+        <div id="admin-login-error" style="color:#EF4444; font-size:13px; margin-bottom:12px; display:none;">
+            密码错误，请重试
+        </div>
+        <button onclick="adminLogin()"
+                style="width:100%; height:44px; background:#165DFF; color:#fff;
+                       border:none; border-radius:8px; font-size:15px; cursor:pointer; font-weight:bold;">
+            登 录
+        </button>
+        <button onclick="closeAdminLogin()"
+                style="width:100%; height:40px; background:transparent; color:#6b7280;
+                       border:1px solid #d1d5db; border-radius:8px; font-size:14px;
+                       cursor:pointer; margin-top:10px;">
+            返回首页
+        </button>
+    </div>
+</div>
+
+<!-- ==================== 管理员上传弹窗 ==================== -->
+<div id="admin-upload-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal-card fade-in" style="max-width:500px; text-align:left;">
+        <div style="font-size:20px; font-weight:bold; color:#000; margin-bottom:20px; text-align:center;">
+            上传文件
+        </div>
+        <!-- 分类选择 -->
+        <label style="display:block; font-size:14px; font-weight:bold; color:#374151; margin-bottom:6px;">
+            选择文件分类
+        </label>
+        <select id="upload-category"
+                style="width:100%; padding:10px 14px; border:1px solid #d1d5db; border-radius:8px;
+                       font-size:14px; outline:none; margin-bottom:18px; box-sizing:border-box;">
+            <option value="policy">政策文件</option>
+            <option value="experience">经验分享</option>
+            <option value="written">笔试资料</option>
+            <option value="interview">面试真题</option>
+        </select>
+        <!-- 文件选择 -->
+        <label style="display:block; font-size:14px; font-weight:bold; color:#374151; margin-bottom:6px;">
+            选择文件（支持批量选择）
+        </label>
+        <input id="upload-file-input" type="file" multiple
+               style="width:100%; padding:10px; border:1px dashed #d1d5db; border-radius:8px;
+                      font-size:14px; margin-bottom:8px; box-sizing:border-box;">
+        <div id="upload-file-list" style="font-size:12px; color:#6b7280; margin-bottom:16px; max-height:120px; overflow-y:auto;"></div>
+        <!-- 进度提示 -->
+        <div id="upload-progress" style="display:none; font-size:13px; color:#165DFF; margin-bottom:12px; text-align:center;">
+            正在上传中...
+        </div>
+        <!-- 按钮 -->
+        <div style="display:flex; gap:10px;">
+            <button onclick="uploadFiles()"
+                    style="flex:1; height:44px; background:#10B981; color:#fff;
+                           border:none; border-radius:8px; font-size:15px; cursor:pointer; font-weight:bold;">
+                确认上传
+            </button>
+            <button onclick="closeUploadModal()"
+                    style="flex:1; height:44px; background:#e5e7eb; color:#374151;
+                           border:none; border-radius:8px; font-size:15px; cursor:pointer;">
+                取消
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 主页面内容 ==================== -->
+<div id="main-content" class="max-w-3xl mx-auto px-4 pb-10">
+
+    <!-- 页面标题 -->
+    <h1 id="site-title" class="text-center font-bold" style="font-size:28px; margin:30px 0 6px 0;">
+        江西水利电力大学转专业信息站
+    </h1>
+    <p id="site-subtitle" class="text-center" style="font-size:14px; color:#6b7280; margin-bottom:20px;">
+        收集整理全校各专业转专业经验、笔试面试资料、政策文件
+    </p>
+
+    <!-- 管理员工具栏（默认隐藏） -->
+    <div id="admin-toolbar" style="display:none; text-align:center; margin-bottom:16px;">
+        <button onclick="openUploadModal()"
+                style="background:#10B981; color:#fff; border:none; border-radius:8px;
+                       padding:10px 24px; font-size:15px; cursor:pointer; font-weight:bold; margin:0 6px 8px 6px;">
+            <i class="fa fa-upload"></i> 上传文件
+        </button>
+        <button onclick="exportData()"
+                style="background:#3B82F6; color:#fff; border:none; border-radius:8px;
+                       padding:10px 24px; font-size:15px; cursor:pointer; font-weight:bold; margin:0 6px 8px 6px;">
+            <i class="fa fa-download"></i> 导出数据
+        </button>
+        <button onclick="adminLogout()"
+                style="background:#9CA3AF; color:#fff; border:none; border-radius:8px;
+                       padding:10px 24px; font-size:15px; cursor:pointer; font-weight:bold; margin:0 6px 8px 6px;">
+            <i class="fa fa-sign-out"></i> 退出管理
+        </button>
+    </div>
+
+    <!-- 搜索框 -->
+    <div style="position:relative; margin-bottom:16px;">
+        <i class="fa fa-search" style="position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#9ca3af;"></i>
+        <input id="search-input" type="text" placeholder="搜索文件名..."
+               style="width:100%; padding:12px 16px 12px 40px; border:1px solid #d1d5db;
+                      border-radius:8px; font-size:15px; outline:none; box-sizing:border-box;"
+               oninput="onSearch()">
+    </div>
+
+    <!-- 导航标签页 -->
+    <div id="tab-nav" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;">
+        <button class="tab-btn active" data-tab="all"
+                style="padding:8px 18px; border-radius:8px; border:none; font-size:14px;
+                       cursor:pointer; font-weight:bold; background:#165DFF; color:#fff;">
+            全部文件
+        </button>
+        <button class="tab-btn" data-tab="policy"
+                style="padding:8px 18px; border-radius:8px; border:none; font-size:14px;
+                       cursor:pointer; background:#e5e7eb; color:#374151;">
+            政策文件
+        </button>
+        <button class="tab-btn" data-tab="experience"
+                style="padding:8px 18px; border-radius:8px; border:none; font-size:14px;
+                       cursor:pointer; background:#e5e7eb; color:#374151;">
+            经验分享
+        </button>
+        <button class="tab-btn" data-tab="written"
+                style="padding:8px 18px; border-radius:8px; border:none; font-size:14px;
+                       cursor:pointer; background:#e5e7eb; color:#374151;">
+            笔试资料
+        </button>
+        <button class="tab-btn" data-tab="interview"
+                style="padding:8px 18px; border-radius:8px; border:none; font-size:14px;
+                       cursor:pointer; background:#e5e7eb; color:#374151;">
+            面试真题
+        </button>
+    </div>
+
+    <!-- 文件列表容器 -->
+    <div id="file-list-container">
+        <div id="file-empty" style="text-align:center; padding:60px 20px; color:#9ca3af; display:none;">
+            <i class="fa fa-inbox" style="font-size:48px; display:block; margin-bottom:12px;"></i>
+            暂无文件
+        </div>
+        <div id="file-list"></div>
+    </div>
+
+    <!-- 页脚 -->
+    <div style="text-align:center; padding:30px 0 20px 0; color:#9ca3af; font-size:13px;">
+        本站仅作学习交流使用，如有侵权请联系删除
+    </div>
+</div>
+
+<!-- ==================== 所有 JavaScript 逻辑 ==================== -->
+<script>
+/* =================================================================
+   ██████  配  置  区  域  ██████
+   修改下面的变量即可自定义网站，无需改动其他代码
+   ================================================================= */
+
+var CONFIG = {
+    // ★ 网站标题（显示在页面顶部）
+    siteTitle: '江西水利电力大学转专业信息站',
+
+    // ★ 网站副标题
+    siteSubtitle: '收集整理全校各专业转专业经验、笔试面试资料、政策文件',
+
+    // ★ QQ群号码（显示在弹窗中）
+    qqGroupNumber: '340865393',
+
+    // ★ 管理员密码（明文，修改此值即可更换密码）
+    adminPassword: 'admin123',
+
+    // ★ 主题颜色（用于按钮、标签选中色等）
+    themeColor: '#165DFF',
+
+    // ★ 弹窗关闭后多久不再弹出（天数）
+    popupExpiryDays: 30,
+
+    // ★ 管理员登录有效期（天数）
+    adminExpiryDays: 7
+};
+
+/* =================================================================
+   ██████  初  始  文  件  数  据  ██████
+   下面是预置的示例文件数据，管理员可通过后台管理
+   每个文件对象包含：
+     id        - 唯一ID
+     name      - 文件名
+     category  - 分类: policy/experience/written/interview
+     type      - 文件类型: pdf/word/excel/ppt/image/other
+     ext       - 扩展名
+     size      - 文件大小(字节)
+     uploadDate- 上传日期 YYYY-MM-DD
+     isDemo    - true=示例文件 false=真实上传的文件
+   ================================================================= */
+
+var INITIAL_FILES = [
+    {
+        id: 1700000001,
+        name: '2024年江西水利电力大学转专业实施办法.pdf',
+        category: 'policy',
+        type: 'pdf',
+        ext: '.pdf',
+        size: 2847360,
+        uploadDate: '2024-09-15',
+        isDemo: true
+    },
+    {
+        id: 1700000002,
+        name: '2023年转专业经验分享-从水利到电气工程.docx',
+        category: 'experience',
+        type: 'word',
+        ext: '.docx',
+        size: 1520640,
+        uploadDate: '2024-08-20',
+        isDemo: true
+    },
+    {
+        id: 1700000003,
+        name: '转专业笔试资料-高等数学真题汇总(2019-2024).pdf',
+        category: 'written',
+        type: 'pdf',
+        ext: '.pdf',
+        size: 5120000,
+        uploadDate: '2024-10-01',
+        isDemo: true
+    },
+    {
+        id: 1700000004,
+        name: '面试常见问题及回答技巧(含历年真题).pdf',
+        category: 'interview',
+        type: 'pdf',
+        ext: '.pdf',
+        size: 1843200,
+        uploadDate: '2024-07-12',
+        isDemo: true
+    },
+    {
+        id: 1700000005,
+        name: '2022-2024年各专业接收转专业人数统计表.xlsx',
+        category: 'policy',
+        type: 'excel',
+        ext: '.xlsx',
+        size: 962560,
+        uploadDate: '2024-06-28',
+        isDemo: true
+    },
+    {
+        id: 1700000006,
+        name: '转专业面试自我介绍优秀模板.pptx',
+        category: 'interview',
+        type: 'ppt',
+        ext: '.pptx',
+        size: 3563520,
+        uploadDate: '2024-05-15',
+        isDemo: true
+    },
+    {
+        id: 1700000007,
+        name: '英语转专业笔试复习大纲与模拟题.docx',
+        category: 'written',
+        type: 'word',
+        ext: '.docx',
+        size: 1245184,
+        uploadDate: '2024-09-30',
+        isDemo: true
+    },
+    {
+        id: 1700000008,
+        name: '学长分享-土木工程转计算机科学与技术经验.pdf',
+        category: 'experience',
+        type: 'pdf',
+        ext: '.pdf',
+        size: 2150400,
+        uploadDate: '2024-04-20',
+        isDemo: true
+    }
+];
+
+/* =================================================================
+   ██████  核  心  代  码  （无需修改以下内容）  ██████
+   ================================================================= */
+
+// ---- localStorage 键名 ----
+var STORAGE_KEY_FILES  = 'jxsldl_files_metadata';
+var STORAGE_KEY_POPUP  = 'jxsldl_popup_closed_ts';
+var STORAGE_KEY_ADMIN  = 'jxsldl_admin_auth';
+var DB_NAME = 'JXSDLD_FileStorage';
+var DB_STORE = 'files';
+
+// ---- 全局状态 ----
+var files = [];           // 当前所有文件元数据
+var currentTab = 'all'; // 当前选中的标签
+var isAdmin = false;     // 当前是否为管理员模式
+
+// ==================== 工具函数 ====================
+
+/** 根据文件名判断文件类型 */
+function getFileType(fileName) {
+    var n = fileName.toLowerCase();
+    if (/\.pdf$/i.test(n))      return 'pdf';
+    if (/\.docx?$/i.test(n))    return 'word';
+    if (/\.xlsx?$/i.test(n))    return 'excel';
+    if (/\.pptx?$/i.test(n))    return 'ppt';
+    if (/\.(jpg|jpeg|png|gif|bmp|svg|webp|ico)$/i.test(n)) return 'image';
+    return 'other';
+}
+
+/** 根据文件类型获取 Font Awesome 图标类名 */
+function getFileIconClass(fileType) {
+    var map = {
+        'pdf':   'fa-file-pdf-o',
+        'word':  'fa-file-word-o',
+        'excel': 'fa-file-excel-o',
+        'ppt':   'fa-file-powerpoint-o',
+        'image': 'fa-file-image-o',
+        'other': 'fa-file-o'
+    };
+    return map[fileType] || 'fa-file-o';
+}
+
+/** 根据文件类型获取图标颜色 CSS 类 */
+function getFileIconColor(fileType) {
+    var map = {
+        'pdf':   'icon-pdf',
+        'word':  'icon-word',
+        'excel': 'icon-excel',
+        'ppt':   'icon-ppt',
+        'image': 'icon-image',
+        'other': 'icon-other'
+    };
+    return map[fileType] || 'icon-other';
+}
+
+/** 格式化文件大小 */
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+    return (bytes / 1073741824).toFixed(2) + ' GB';
+}
+
+/** 获取当前日期 YYYY-MM-DD */
+function getTodayStr() {
+    var d = new Date();
+    var m = d.getMonth() + 1;
+    var day = d.getDate();
+    return d.getFullYear() + '-' + (m < 10 ? '0' + m : m) + '-' + (day < 10 ? '0' + day : day);
+}
+
+/** 生成唯一ID */
+function generateId() {
+    return Date.now() * 1000 + Math.floor(Math.random() * 1000);
+}
+
+// ==================== IndexedDB 操作 ====================
+
+/** 打开数据库 */
+function openDB() {
+    return new Promise(function(resolve, reject) {
+        var req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = function(e) {
+            var db = e.target.result;
+            if (!db.objectStoreNames.contains(DB_STORE)) {
+                db.createObjectStore(DB_STORE, { keyPath: 'id' });
+            }
+        };
+        req.onsuccess = function(e) { resolve(e.target.result); };
+        req.onerror   = function(e) { reject(e.target.error); };
+    });
+}
+
+/** 将文件数据存入 IndexedDB */
+function saveFileToDB(id, name, arrayBuffer) {
+    return openDB().then(function(db) {
+        return new Promise(function(resolve, reject) {
+            var tx = db.transaction(DB_STORE, 'readwrite');
+            var store = tx.objectStore(DB_STORE);
+            store.put({ id: id, name: name, data: arrayBuffer });
+            tx.oncomplete = function() { resolve(); };
+            tx.onerror    = function(e) { reject(e.target.error); };
+        });
+    });
+}
+
+/** 从 IndexedDB 读取文件数据 */
+function getFileFromDB(id) {
+    return openDB().then(function(db) {
+        return new Promise(function(resolve, reject) {
+            var tx = db.transaction(DB_STORE, 'readonly');
+            var store = tx.objectStore(DB_STORE);
+            var req = store.get(id);
+            req.onsuccess = function() { resolve(req.result); };
+            req.onerror   = function(e) { reject(e.target.error); };
+        });
+    });
+}
+
+/** 从 IndexedDB 删除文件数据 */
+function deleteFileFromDB(id) {
+    return openDB().then(function(db) {
+        return new Promise(function(resolve, reject) {
+            var tx = db.transaction(DB_STORE, 'readwrite');
+            var store = tx.objectStore(DB_STORE);
+            store.delete(id);
+            tx.oncomplete = function() { resolve(); };
+            tx.onerror    = function(e) { reject(e.target.error); };
+        });
+    });
+}
+
+// ==================== 数据持久化（localStorage） ====================
+
+/** 保存文件元数据到 localStorage */
+function saveFilesMetadata() {
+    localStorage.setItem(STORAGE_KEY_FILES, JSON.stringify(files));
+}
+
+/** 从 localStorage 加载文件元数据 */
+function loadFilesMetadata() {
+    var stored = localStorage.getItem(STORAGE_KEY_FILES);
+    if (stored) {
+        try {
+            files = JSON.parse(stored);
+        } catch(e) {
+            files = [];
+        }
+    }
+    // 合并初始文件（将 INITIAL_FILES 中不存在于已存储数据中的条目加入）
+    if (files.length === 0) {
+        files = INITIAL_FILES.slice();
+        saveFilesMetadata();
+    } else {
+        // 检查是否有新的初始文件需要合并
+        var existingIds = {};
+        files.forEach(function(f) { existingIds[f.id] = true; });
+        var hasNew = false;
+        INITIAL_FILES.forEach(function(f) {
+            if (!existingIds[f.id]) {
+                files.push(f);
+                hasNew = true;
+            }
+        });
+        if (hasNew) saveFilesMetadata();
+    }
+}
+
+// ==================== QQ弹窗逻辑 ====================
+
+function shouldShowPopup() {
+    var ts = localStorage.getItem(STORAGE_KEY_POPUP);
+    if (!ts) return true;
+    var closedTime = parseInt(ts, 10);
+    var now = Date.now();
+    var expiryMs = CONFIG.popupExpiryDays * 24 * 60 * 60 * 1000;
+    return (now - closedTime) > expiryMs;
+}
+
+function showPopup() {
+    if (!shouldShowPopup()) return;
+    document.getElementById('qq-popup').style.display = 'flex';
+    document.body.classList.add('no-scroll');
+}
+
+function closePopup() {
+    localStorage.setItem(STORAGE_KEY_POPUP, Date.now().toString());
+    document.getElementById('qq-popup').style.display = 'none';
+    document.body.classList.remove('no-scroll');
+}
+
+// ==================== 管理员认证 ====================
+
+function checkAdminAuth() {
+    var stored = localStorage.getItem(STORAGE_KEY_ADMIN);
+    if (!stored) return false;
+    try {
+        var auth = JSON.parse(stored);
+        var now = Date.now();
+        if (now < auth.expiryTime) {
+            isAdmin = true;
+            return true;
+        }
+    } catch(e) {}
+    localStorage.removeItem(STORAGE_KEY_ADMIN);
+    return false;
+}
+
+function adminLogin() {
+    var pwd = document.getElementById('admin-password-input').value;
+    if (pwd === CONFIG.adminPassword) {
+        var expiryTime = Date.now() + CONFIG.adminExpiryDays * 24 * 60 * 60 * 1000;
+        localStorage.setItem(STORAGE_KEY_ADMIN, JSON.stringify({
+            token: 'auth_' + Date.now(),
+            expiryTime: expiryTime
+        }));
+        isAdmin = true;
+        document.getElementById('admin-login-overlay').style.display = 'none';
+        document.body.classList.remove('no-scroll');
+        // 清除 URL 中的 #admin
+        if (window.location.hash === '#admin') {
+            history.replaceState(null, '', window.location.pathname);
+        }
+        updateAdminUI();
+        renderFileList();
+        alert('登录成功！您现在处于管理员模式。');
+    } else {
+        var errEl = document.getElementById('admin-login-error');
+        errEl.style.display = 'block';
+        document.getElementById('admin-password-input').value = '';
+        document.getElementById('admin-password-input').focus();
+    }
+}
+
+function closeAdminLogin() {
+    document.getElementById('admin-login-overlay').style.display = 'none';
+    document.body.classList.remove('no-scroll');
+    // 清除 hash
+    if (window.location.hash === '#admin') {
+        history.replaceState(null, '', window.location.pathname);
+    }
+}
+
+function adminLogout() {
+    if (confirm('确定要退出管理员模式吗？')) {
+        localStorage.removeItem(STORAGE_KEY_ADMIN);
+        isAdmin = false;
+        updateAdminUI();
+        renderFileList();
+    }
+}
+
+function updateAdminUI() {
+    var toolbar = document.getElementById('admin-toolbar');
+    toolbar.style.display = isAdmin ? 'block' : 'none';
+}
+
+// ==================== 上传文件 ====================
+
+function openUploadModal() {
+    document.getElementById('upload-file-input').value = '';
+    document.getElementById('upload-file-list').innerHTML = '';
+    document.getElementById('upload-progress').style.display = 'none';
+    document.getElementById('admin-upload-overlay').style.display = 'flex';
+    document.body.classList.add('no-scroll');
+}
+
+function closeUploadModal() {
+    document.getElementById('admin-upload-overlay').style.display = 'none';
+    document.body.classList.remove('no-scroll');
+}
+
+// 文件选择时预览文件列表
+document.getElementById('upload-file-input').addEventListener('change', function() {
+    var files = this.files;
+    var listEl = document.getElementById('upload-file-list');
+    if (files.length === 0) {
+        listEl.innerHTML = '';
+        return;
+    }
+    var html = '<strong>已选择 ' + files.length + ' 个文件：</strong><br>';
+    for (var i = 0; i < files.length; i++) {
+        html += (i + 1) + '. ' + files[i].name + ' (' + formatFileSize(files[i].size) + ')<br>';
+    }
+    listEl.innerHTML = html;
+});
+
+/** 上传文件主流程 */
+function uploadFiles() {
+    var input = document.getElementById('upload-file-input');
+    var category = document.getElementById('upload-category').value;
+    var rawFiles = input.files;
+
+    if (!rawFiles || rawFiles.length === 0) {
+        alert('请先选择要上传的文件');
+        return;
+    }
+
+    var progressEl = document.getElementById('upload-progress');
+    progressEl.style.display = 'block';
+    progressEl.textContent = '正在处理 0/' + rawFiles.length + ' 个文件...';
+
+    var uploaded = 0;
+    var totalSize = 0;
+
+    // 逐个处理文件
+    function processNext(index) {
+        if (index >= rawFiles.length) {
+            // 全部完成
+            progressEl.textContent = '上传完成！共 ' + uploaded + ' 个文件';
+            saveFilesMetadata();
+            renderFileList();
+            input.value = '';
+            document.getElementById('upload-file-list').innerHTML = '';
+            setTimeout(function() {
+                progressEl.style.display = 'none';
+                closeUploadModal();
+            }, 800);
+            return;
+        }
+
+        var file = rawFiles[index];
+        progressEl.textContent = '正在处理 ' + (index + 1) + '/' + rawFiles.length + '：' + file.name;
+
+        // 检查单个文件大小（100MB限制）
+        if (file.size > 100 * 1024 * 1024) {
+            alert('文件 "' + file.name + '" 超过100MB限制，已跳过');
+            processNext(index + 1);
+            return;
+        }
+
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var arrayBuffer = e.target.result;
+            var fileId = generateId();
+            var newFile = {
+                id: fileId,
+                name: file.name,
+                category: category,
+                type: getFileType(file.name),
+                ext: '.' + (file.name.split('.').pop() || '').toLowerCase(),
+                size: file.size,
+                uploadDate: getTodayStr(),
+                isDemo: false
+            };
+
+            // 存入 IndexedDB
+            saveFileToDB(fileId, file.name, arrayBuffer).then(function() {
+                files.unshift(newFile); // 新文件插入最前面
+                uploaded++;
+                totalSize += file.size;
+                processNext(index + 1);
+            }).catch(function(err) {
+                console.error('存储文件失败:', err);
+                alert('文件 "' + file.name + '" 存储失败：' + err.message);
+                processNext(index + 1);
+            });
+        };
+        reader.onerror = function() {
+            alert('读取文件 "' + file.name + '" 失败');
+            processNext(index + 1);
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    processNext(0);
+}
+
+// ==================== 删除文件 ====================
+
+function deleteFile(fileId) {
+    var target = null;
+    for (var i = 0; i < files.length; i++) {
+        if (files[i].id === fileId) { target = files[i]; break; }
+    }
+    if (!target) return;
+    if (!confirm('确定要删除文件 "' + target.name + '" 吗？此操作不可恢复。')) return;
+
+    // 从数组中移除
+    files = files.filter(function(f) { return f.id !== fileId; });
+    saveFilesMetadata();
+
+    // 从 IndexedDB 中删除（仅非demo文件）
+    if (!target.isDemo) {
+        deleteFileFromDB(fileId).catch(function() {});
+    }
+
+    renderFileList();
+}
+
+// ==================== 下载文件 ====================
+
+function downloadFile(fileId) {
+    var target = null;
+    for (var i = 0; i < files.length; i++) {
+        if (files[i].id === fileId) { target = files[i]; break; }
+    }
+    if (!target) return;
+
+    if (target.isDemo) {
+        alert('这是示例文件，无实际内容。请通过管理员后台上传真实文件。\n\n示例文件名：' + target.name);
+        return;
+    }
+
+    getFileFromDB(fileId).then(function(record) {
+        if (!record || !record.data) {
+            alert('文件数据不存在，可能已被清除。');
+            return;
+        }
+        var blob = new Blob([record.data]);
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = target.name;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }).catch(function(err) {
+        alert('下载失败：' + err.message);
+    });
+}
+
+// ==================== 导出数据 ====================
+
+function exportData() {
+    // 导出文件元数据（不含实际文件内容）
+    var exportJSON = JSON.stringify(files, null, 2);
+    var blob = new Blob([exportJSON], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'jxsldl_files_backup_' + getTodayStr() + '.json';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    alert('数据导出成功！\n\n导出的JSON文件包含所有文件的元数据。\n如需恢复数据，请将此JSON内容粘贴到 index.html 的 INITIAL_FILES 数组中。');
+}
+
+// ==================== 搜索 ====================
+
+function onSearch() {
+    renderFileList();
+}
+
+// ==================== 标签切换 ====================
+
+function switchTab(tab) {
+    currentTab = tab;
+    // 更新标签样式
+    var btns = document.querySelectorAll('.tab-btn');
+    btns.forEach(function(btn) {
+        if (btn.getAttribute('data-tab') === tab) {
+            btn.style.background = CONFIG.themeColor;
+            btn.style.color = '#fff';
+        } else {
+            btn.style.background = '#e5e7eb';
+            btn.style.color = '#374151';
+        }
+    });
+    renderFileList();
+}
+
+// ==================== 渲染文件列表 ====================
+
+function renderFileList() {
+    var searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
+    var container = document.getElementById('file-list');
+    var emptyEl = document.getElementById('file-empty');
+
+    // 筛选
+    var filtered = files.filter(function(f) {
+        // 分类筛选
+        if (currentTab !== 'all' && f.category !== currentTab) return false;
+        // 搜索筛选
+        if (searchTerm && f.name.toLowerCase().indexOf(searchTerm) === -1) return false;
+        return true;
+    });
+
+    // 按上传时间倒序
+    filtered.sort(function(a, b) {
+        if (a.uploadDate > b.uploadDate) return -1;
+        if (a.uploadDate < b.uploadDate) return 1;
+        return b.id - a.id;
+    });
+
+    if (filtered.length === 0) {
+        container.innerHTML = '';
+        emptyEl.style.display = 'block';
+        return;
+    }
+
+    emptyEl.style.display = 'none';
+
+    var html = '';
+    for (var i = 0; i < filtered.length; i++) {
+        var f = filtered[i];
+        var iconClass = getFileIconClass(f.type);
+        var iconColor = getFileIconColor(f.type);
+        var sizeStr = formatFileSize(f.size);
+
+        html += '<div style="background:#fff; border-radius:8px; padding:16px; margin-bottom:12px;' +
+                ' box-shadow:0 1px 3px rgba(0,0,0,0.08); display:flex; align-items:center;' +
+                ' flex-wrap:wrap; gap:10px;">';
+
+        // 文件图标
+        html += '<i class="fa ' + iconClass + ' ' + iconColor + '" style="font-size:28px; flex-shrink:0; width:36px; text-align:center;"></i>';
+
+        // 文件名 + 上传时间 + 文件大小
+        html += '<div style="flex:1; min-width:180px;">';
+        html += '<div style="font-size:16px; font-weight:bold; color:#1f2937; word-break:break-all;">' + escapeHTML(f.name) + '</div>';
+        html += '<div style="margin-top:2px;">';
+        html += '<span style="font-size:12px; color:#9ca3af;">' + f.uploadDate + '</span>';
+        html += '<span style="font-size:12px; color:#9ca3af; margin-left:12px;">' + sizeStr + '</span>';
+        html += '</div></div>';
+
+        // 按钮区域
+        html += '<div style="display:flex; gap:8px; flex-shrink:0; align-items:center;">';
+        // 下载按钮
+        html += '<button onclick="downloadFile(' + f.id + ')"' +
+                ' style="background:' + CONFIG.themeColor + '; color:#fff; border:none; border-radius:6px;' +
+                ' padding:8px 16px; font-size:14px; cursor:pointer; white-space:nowrap; font-weight:bold;">' +
+                '<i class="fa fa-download"></i> 下载</button>';
+        // 管理员删除按钮
+        if (isAdmin) {
+            html += '<button onclick="deleteFile(' + f.id + ')"' +
+                    ' style="background:#EF4444; color:#fff; border:none; border-radius:6px;' +
+                    ' padding:8px 16px; font-size:14px; cursor:pointer; white-space:nowrap;">' +
+                    '<i class="fa fa-trash"></i> 删除</button>';
+        }
+        html += '</div>';
+
+        html += '</div>';
+    }
+
+    container.innerHTML = html;
+}
+
+/** HTML 转义（防止XSS） */
+function escapeHTML(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+}
+
+// ==================== 应用配置到页面 ====================
+
+function applyConfig() {
+    document.getElementById('site-title').textContent = CONFIG.siteTitle;
+    document.getElementById('site-subtitle').textContent = CONFIG.siteSubtitle;
+    document.getElementById('qq-number-display').textContent = CONFIG.qqGroupNumber;
+    document.title = CONFIG.siteTitle;
+
+    // 动态更新主题色相关的内联样式
+    var styleId = 'dynamic-theme-style';
+    var existingStyle = document.getElementById(styleId);
+    if (existingStyle) existingStyle.remove();
+
+    var styleEl = document.createElement('style');
+    styleEl.id = styleId;
+    styleEl.textContent = '';
+    document.head.appendChild(styleEl);
+}
+
+// ==================== 初始化 ====================
+
+function init() {
+    applyConfig();
+    loadFilesMetadata();
+
+    // 检查管理员状态
+    checkAdminAuth();
+    updateAdminUI();
+
+    // 绑定标签点击事件
+    var tabBtns = document.querySelectorAll('.tab-btn');
+    tabBtns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            switchTab(this.getAttribute('data-tab'));
+        });
+    });
+
+    // 绑定QQ弹窗关闭按钮
+    document.getElementById('qq-popup-close').addEventListener('click', closePopup);
+
+    // 渲染文件列表
+    renderFileList();
+
+    // 处理 URL hash：检测 #admin 入口
+    handleHash();
+
+    // 监听 hash 变化
+    window.addEventListener('hashchange', handleHash);
+
+    // 显示QQ弹窗（在hash处理之后，确保弹窗优先级正确）
+    // 但如果正在显示管理员登录，则不弹出QQ弹窗
+    var loginOverlay = document.getElementById('admin-login-overlay');
+    if (loginOverlay.style.display !== 'flex') {
+        showPopup();
+    }
+}
+
+function handleHash() {
+    if (window.location.hash === '#admin') {
+        if (isAdmin) {
+            // 已登录，直接显示管理功能
+            updateAdminUI();
+            renderFileList();
+        } else {
+            // 未登录，显示登录弹窗
+            document.getElementById('admin-password-input').value = '';
+            document.getElementById('admin-login-error').style.display = 'none';
+            document.getElementById('admin-login-overlay').style.display = 'flex';
+            document.body.classList.add('no-scroll');
+            // 隐藏可能正在显示的QQ弹窗
+            document.getElementById('qq-popup').style.display = 'none';
+            setTimeout(function() {
+                document.getElementById('admin-password-input').focus();
+            }, 300);
+        }
+    }
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', init);
+
+console.log('✅ 江西水利电力大学转专业信息站 已就绪');
+console.log('📌 管理员入口：在URL后添加 #admin');
+console.log('🔑 默认密码：' + CONFIG.adminPassword + '（可在代码CONFIG中修改）');
+console.log('💾 文件存储：IndexedDB + localStorage');
+console.log('📂 初始示例文件：' + INITIAL_FILES.length + ' 个');
+</script>
+
+</body>
+</html>

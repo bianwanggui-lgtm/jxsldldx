@@ -49,6 +49,59 @@ body.no-scroll { overflow: hidden; }
 /* 过渡动画 */
 .fade-in { animation: fadeIn 0.25s ease; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* 搜索关键词高亮 */
+.search-highlight { background: #FEF08A; padding: 0 2px; border-radius: 2px; }
+
+/* 搜索框清除按钮 */
+.search-clear-btn {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    width: 24px; height: 24px; border-radius: 50%; border: none;
+    background: #d1d5db; color: #fff; font-size: 14px; cursor: pointer;
+    display: none; align-items: center; justify-content: center; line-height: 1;
+}
+.search-clear-btn:hover { background: #9ca3af; }
+.search-clear-btn.visible { display: flex; }
+
+/* 搜索历史下拉 */
+.search-history-dropdown {
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100; display: none;
+    margin-top: 2px; overflow: hidden;
+}
+.search-history-dropdown.visible { display: block; }
+.search-history-item {
+    padding: 10px 16px; font-size: 14px; color: #374151; cursor: pointer;
+    display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #f3f4f6;
+}
+.search-history-item:hover { background: #f9fafb; }
+.search-history-item:last-child { border-bottom: none; }
+.search-history-item .fa-search { color: #9ca3af; font-size: 12px; }
+.search-history-clear-all {
+    padding: 8px 16px; font-size: 12px; color: #9ca3af; text-align: center;
+    cursor: pointer; border-top: 1px solid #f3f4f6;
+}
+.search-history-clear-all:hover { color: #EF4444; }
+
+/* 分类标签 */
+.category-badge {
+    display: inline-block; padding: 1px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: bold; margin-left: 8px; vertical-align: middle;
+    white-space: nowrap;
+}
+.cat-policy     { background: #DBEAFE; color: #1E40AF; }
+.cat-experience { background: #D1FAE5; color: #065F46; }
+.cat-written    { background: #FEE2E2; color: #991B1B; }
+.cat-interview  { background: #EDE9FE; color: #5B21B6; }
+
+/* 搜索信息提示条 */
+.search-info-bar {
+    text-align: center; padding: 8px 12px; margin-bottom: 12px;
+    background: #EFF6FF; border-radius: 8px; font-size: 13px; color: #1E40AF;
+    display: none;
+}
+.search-info-bar.visible { display: block; }
 </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -175,13 +228,23 @@ body.no-scroll { overflow: hidden; }
     </div>
 
     <!-- 搜索框 -->
-    <div style="position:relative; margin-bottom:16px;">
-        <i class="fa fa-search" style="position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#9ca3af;"></i>
-        <input id="search-input" type="text" placeholder="搜索文件名..."
-               style="width:100%; padding:12px 16px 12px 40px; border:1px solid #d1d5db;
+    <div id="search-wrapper" style="position:relative; margin-bottom:16px;">
+        <i class="fa fa-search" style="position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#9ca3af; z-index:1; pointer-events:none;"></i>
+        <input id="search-input" type="text" placeholder="搜索文件名、关键词或专业名称..."
+               autocomplete="off"
+               style="width:100%; padding:14px 40px 14px 42px; border:1px solid #d1d5db;
                       border-radius:8px; font-size:15px; outline:none; box-sizing:border-box;"
-               oninput="onSearch()">
+               oninput="onSearch()"
+               onfocus="showSearchHistory()"
+               onblur="hideSearchHistory()"
+               onkeydown="if(event.key==='Enter')onSearch();">
+        <button id="search-clear-btn" class="search-clear-btn" onclick="clearSearch()"
+                title="清空搜索">&times;</button>
+        <!-- 搜索历史下拉 -->
+        <div id="search-history-dropdown" class="search-history-dropdown"></div>
     </div>
+    <!-- 搜索信息提示 -->
+    <div id="search-info-bar" class="search-info-bar"></div>
 
     <!-- 导航标签页 -->
     <div id="tab-nav" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;">
@@ -359,16 +422,21 @@ var INITIAL_FILES = [
    ================================================================= */
 
 // ---- localStorage 键名 ----
-var STORAGE_KEY_FILES  = 'jxsldl_files_metadata';
-var STORAGE_KEY_POPUP  = 'jxsldl_popup_closed_ts';
-var STORAGE_KEY_ADMIN  = 'jxsldl_admin_auth';
+var STORAGE_KEY_FILES    = 'jxsldl_files_metadata';
+var STORAGE_KEY_POPUP    = 'jxsldl_popup_closed_ts';
+var STORAGE_KEY_ADMIN    = 'jxsldl_admin_auth';
+var STORAGE_KEY_SEARCH   = 'jxsldl_search_history';
+var MAX_SEARCH_HISTORY   = 5;
 var DB_NAME = 'JXSDLD_FileStorage';
 var DB_STORE = 'files';
 
 // ---- 全局状态 ----
-var files = [];           // 当前所有文件元数据
-var currentTab = 'all'; // 当前选中的标签
-var isAdmin = false;     // 当前是否为管理员模式
+var files = [];             // 当前所有文件元数据
+var currentTab = 'all';     // 当前选中的标签
+var previousTab = 'all';    // 搜索前选中的标签（用于清空搜索后恢复）
+var isAdmin = false;        // 当前是否为管理员模式
+var searchHistory = [];     // 搜索历史记录
+var currentMatchInfo = {};  // 当前搜索匹配信息 { fileId: matchInfo }，用于高亮
 
 // ==================== 工具函数 ====================
 
@@ -796,17 +864,251 @@ function exportData() {
     alert('数据导出成功！\n\n导出的JSON文件包含所有文件的元数据。\n如需恢复数据，请将此JSON内容粘贴到 index.html 的 INITIAL_FILES 数组中。');
 }
 
-// ==================== 搜索 ====================
+// ==================== 搜索功能 ====================
+
+/** 根据分类key获取中文名称 */
+function getCategoryName(cat) {
+    var map = {
+        'policy':     '政策文件',
+        'experience': '经验分享',
+        'written':    '笔试资料',
+        'interview':  '面试真题'
+    };
+    return map[cat] || cat;
+}
+
+/** 模糊匹配：支持子串匹配 + 子序列匹配（如"计科"匹配"计算机科学"）
+ *  返回匹配信息对象，或 null 表示不匹配 */
+function matchFuzzy(searchTerm, text) {
+    var lowerSearch = searchTerm.toLowerCase();
+    var lowerText = text.toLowerCase();
+
+    // 1. 精确子串匹配
+    var idx = lowerText.indexOf(lowerSearch);
+    if (idx !== -1) {
+        return { type: 'substring', index: idx, length: searchTerm.length };
+    }
+
+    // 2. 子序列匹配（每个搜索字符按顺序在文本中出现）
+    var si = 0;
+    var positions = [];
+    for (var ti = 0; ti < lowerText.length && si < lowerSearch.length; ti++) {
+        if (lowerText.charAt(ti) === lowerSearch.charAt(si)) {
+            positions.push(ti);
+            si++;
+        }
+    }
+    if (si === lowerSearch.length) {
+        return { type: 'subsequence', positions: positions };
+    }
+
+    return null;
+}
+
+/** 判断文件是否匹配搜索词（同时搜索文件名和分类名） */
+function fileMatchesSearch(file, searchTerm) {
+    if (!searchTerm) return { matchType: 'none' };
+
+    // 匹配文件名
+    var nameMatch = matchFuzzy(searchTerm, file.name);
+    if (nameMatch) return { matchType: 'name', matchInfo: nameMatch };
+
+    // 匹配分类名
+    var catName = getCategoryName(file.category);
+    var catMatch = matchFuzzy(searchTerm, catName);
+    if (catMatch) return { matchType: 'category', matchInfo: catMatch };
+
+    return null;
+}
+
+/** 对文本中的匹配项进行高亮处理，返回HTML */
+function highlightText(text, matchInfo) {
+    if (!matchInfo) return escapeHTML(text);
+
+    if (matchInfo.type === 'substring') {
+        var idx = matchInfo.index;
+        var len = matchInfo.length;
+        return escapeHTML(text.substring(0, idx)) +
+               '<mark class="search-highlight">' +
+               escapeHTML(text.substring(idx, idx + len)) +
+               '</mark>' +
+               escapeHTML(text.substring(idx + len));
+    }
+
+    if (matchInfo.type === 'subsequence') {
+        var positions = matchInfo.positions;
+        var result = '';
+        var lastPos = 0;
+        for (var i = 0; i < positions.length; i++) {
+            var pos = positions[i];
+            if (pos > lastPos) {
+                result += escapeHTML(text.substring(lastPos, pos));
+            }
+            result += '<mark class="search-highlight">' +
+                      escapeHTML(text.charAt(pos)) +
+                      '</mark>';
+            lastPos = pos + 1;
+        }
+        if (lastPos < text.length) {
+            result += escapeHTML(text.substring(lastPos));
+        }
+        return result;
+    }
+
+    return escapeHTML(text);
+}
+
+// ==================== 搜索历史 ====================
+
+/** 加载搜索历史 */
+function loadSearchHistory() {
+    var stored = localStorage.getItem(STORAGE_KEY_SEARCH);
+    if (stored) {
+        try { searchHistory = JSON.parse(stored); } catch(e) { searchHistory = []; }
+    }
+}
+
+/** 保存搜索历史 */
+function saveSearchHistory() {
+    localStorage.setItem(STORAGE_KEY_SEARCH, JSON.stringify(searchHistory));
+}
+
+/** 添加搜索记录（去重，最多MAX条） */
+function addSearchHistory(term) {
+    if (!term || term.trim() === '') return;
+    term = term.trim();
+    // 去重：移除已有的相同记录
+    searchHistory = searchHistory.filter(function(h) { return h !== term; });
+    // 插入到最前面
+    searchHistory.unshift(term);
+    // 限制数量
+    if (searchHistory.length > MAX_SEARCH_HISTORY) {
+        searchHistory = searchHistory.slice(0, MAX_SEARCH_HISTORY);
+    }
+    saveSearchHistory();
+}
+
+/** 显示搜索历史下拉 */
+function showSearchHistory() {
+    var dropdown = document.getElementById('search-history-dropdown');
+    var input = document.getElementById('search-input');
+    if (searchHistory.length === 0 || input.value.trim() !== '') {
+        dropdown.classList.remove('visible');
+        return;
+    }
+    var html = '';
+    for (var i = 0; i < searchHistory.length; i++) {
+        html += '<div class="search-history-item" onmousedown="event.preventDefault();useSearchHistory(\'' +
+                escapeHTMLAttr(searchHistory[i]) + '\')">' +
+                '<i class="fa fa-search"></i> ' + escapeHTML(searchHistory[i]) + '</div>';
+    }
+    html += '<div class="search-history-clear-all" onmousedown="event.preventDefault();clearSearchHistory()">' +
+            '<i class="fa fa-trash-o"></i> 清除搜索历史</div>';
+    dropdown.innerHTML = html;
+    dropdown.classList.add('visible');
+}
+
+function hideSearchHistory() {
+    setTimeout(function() {
+        document.getElementById('search-history-dropdown').classList.remove('visible');
+    }, 200);
+}
+
+function useSearchHistory(term) {
+    var input = document.getElementById('search-input');
+    input.value = term;
+    document.getElementById('search-history-dropdown').classList.remove('visible');
+    onSearch();
+    input.focus();
+}
+
+function clearSearchHistory() {
+    searchHistory = [];
+    saveSearchHistory();
+    document.getElementById('search-history-dropdown').classList.remove('visible');
+    document.getElementById('search-history-dropdown').innerHTML = '';
+}
+
+function escapeHTMLAttr(str) {
+    return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ==================== 搜索主逻辑 ====================
 
 function onSearch() {
+    var searchTerm = document.getElementById('search-input').value.trim();
+    var clearBtn = document.getElementById('search-clear-btn');
+    var infoBar = document.getElementById('search-info-bar');
+
+    // 更新清除按钮可见性
+    if (searchTerm) {
+        clearBtn.classList.add('visible');
+    } else {
+        clearBtn.classList.remove('visible');
+    }
+
+    // 搜索与分类联动
+    if (searchTerm) {
+        // 保存当前标签状态，然后切换到"全部文件"
+        previousTab = currentTab;
+        setActiveTabUI('all');
+        currentTab = 'all';
+    } else {
+        // 清空搜索后恢复之前的标签
+        currentTab = previousTab;
+        setActiveTabUI(currentTab);
+        infoBar.classList.remove('visible');
+        currentMatchInfo = {};
+    }
+
+    // 如果有搜索词，记录到历史
+    if (searchTerm) {
+        addSearchHistory(searchTerm);
+    }
+
     renderFileList();
+
+    // 更新搜索信息提示条
+    updateSearchInfo(searchTerm);
+}
+
+/** 清空搜索框 */
+function clearSearch() {
+    var input = document.getElementById('search-input');
+    input.value = '';
+    input.focus();
+    onSearch();
+}
+
+/** 更新搜索信息条 */
+function updateSearchInfo(searchTerm) {
+    var infoBar = document.getElementById('search-info-bar');
+    if (!searchTerm) {
+        infoBar.classList.remove('visible');
+        return;
+    }
+    var searchTermLower = searchTerm.toLowerCase();
+    var count = 0;
+    for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        if (fileMatchesSearch(f, searchTermLower)) count++;
+    }
+    if (count === 0) {
+        infoBar.textContent = '未找到相关文件，请尝试其他关键词';
+        infoBar.style.background = '#FEF2F2';
+        infoBar.style.color = '#991B1B';
+    } else {
+        infoBar.textContent = '找到 ' + count + ' 个相关文件（关键词："' + searchTerm + '"）';
+        infoBar.style.background = '#EFF6FF';
+        infoBar.style.color = '#1E40AF';
+    }
+    infoBar.classList.add('visible');
 }
 
 // ==================== 标签切换 ====================
 
-function switchTab(tab) {
-    currentTab = tab;
-    // 更新标签样式
+/** 仅更新标签UI样式，不触发渲染 */
+function setActiveTabUI(tab) {
     var btns = document.querySelectorAll('.tab-btn');
     btns.forEach(function(btn) {
         if (btn.getAttribute('data-tab') === tab) {
@@ -817,6 +1119,20 @@ function switchTab(tab) {
             btn.style.color = '#374151';
         }
     });
+}
+
+function switchTab(tab) {
+    // 切换标签时清空搜索
+    var input = document.getElementById('search-input');
+    if (input.value.trim()) {
+        input.value = '';
+        document.getElementById('search-clear-btn').classList.remove('visible');
+        document.getElementById('search-info-bar').classList.remove('visible');
+        currentMatchInfo = {};
+    }
+    currentTab = tab;
+    previousTab = tab;
+    setActiveTabUI(tab);
     renderFileList();
 }
 
@@ -827,12 +1143,23 @@ function renderFileList() {
     var container = document.getElementById('file-list');
     var emptyEl = document.getElementById('file-empty');
 
+    // 重置匹配信息
+    currentMatchInfo = {};
+
     // 筛选
     var filtered = files.filter(function(f) {
         // 分类筛选
         if (currentTab !== 'all' && f.category !== currentTab) return false;
         // 搜索筛选
-        if (searchTerm && f.name.toLowerCase().indexOf(searchTerm) === -1) return false;
+        if (searchTerm) {
+            var match = fileMatchesSearch(f, searchTerm);
+            if (!match) return false;
+            // 保存匹配信息用于高亮
+            if (match.matchType === 'name' && match.matchInfo) {
+                currentMatchInfo[f.id] = match.matchInfo;
+            }
+            return true;
+        }
         return true;
     });
 
@@ -843,9 +1170,16 @@ function renderFileList() {
         return b.id - a.id;
     });
 
+    // 空状态
     if (filtered.length === 0) {
         container.innerHTML = '';
         emptyEl.style.display = 'block';
+        if (searchTerm) {
+            emptyEl.innerHTML = '<i class="fa fa-search" style="font-size:48px; display:block; margin-bottom:12px; color:#d1d5db;"></i>' +
+                               '<span style="color:#9ca3af;">未找到相关文件，请尝试其他关键词</span>';
+        } else {
+            emptyEl.innerHTML = '<i class="fa fa-inbox" style="font-size:48px; display:block; margin-bottom:12px;"></i>暂无文件';
+        }
         return;
     }
 
@@ -857,6 +1191,13 @@ function renderFileList() {
         var iconClass = getFileIconClass(f.type);
         var iconColor = getFileIconColor(f.type);
         var sizeStr = formatFileSize(f.size);
+        var catName = getCategoryName(f.category);
+        var catBadgeClass = 'cat-' + f.category;
+
+        // 文件名高亮处理
+        var displayName = currentMatchInfo[f.id]
+            ? highlightText(f.name, currentMatchInfo[f.id])
+            : escapeHTML(f.name);
 
         html += '<div style="background:#fff; border-radius:8px; padding:16px; margin-bottom:12px;' +
                 ' box-shadow:0 1px 3px rgba(0,0,0,0.08); display:flex; align-items:center;' +
@@ -865,10 +1206,13 @@ function renderFileList() {
         // 文件图标
         html += '<i class="fa ' + iconClass + ' ' + iconColor + '" style="font-size:28px; flex-shrink:0; width:36px; text-align:center;"></i>';
 
-        // 文件名 + 上传时间 + 文件大小
+        // 文件名 + 分类标签 + 上传时间 + 文件大小
         html += '<div style="flex:1; min-width:180px;">';
-        html += '<div style="font-size:16px; font-weight:bold; color:#1f2937; word-break:break-all;">' + escapeHTML(f.name) + '</div>';
-        html += '<div style="margin-top:2px;">';
+        html += '<div style="font-size:16px; font-weight:bold; color:#1f2937; word-break:break-all;">' +
+                displayName +
+                '<span class="category-badge ' + catBadgeClass + '">' + catName + '</span>' +
+                '</div>';
+        html += '<div style="margin-top:4px;">';
         html += '<span style="font-size:12px; color:#9ca3af;">' + f.uploadDate + '</span>';
         html += '<span style="font-size:12px; color:#9ca3af; margin-left:12px;">' + sizeStr + '</span>';
         html += '</div></div>';
@@ -926,6 +1270,7 @@ function applyConfig() {
 function init() {
     applyConfig();
     loadFilesMetadata();
+    loadSearchHistory();
 
     // 检查管理员状态
     checkAdminAuth();
@@ -950,6 +1295,32 @@ function init() {
 
     // 监听 hash 变化
     window.addEventListener('hashchange', handleHash);
+
+    // Ctrl+F 快捷键聚焦搜索框
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+            // 不在输入框或弹窗中时拦截
+            var activeEl = document.activeElement;
+            var isInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable);
+            var modalVisible = document.getElementById('admin-login-overlay').style.display === 'flex' ||
+                               document.getElementById('admin-upload-overlay').style.display === 'flex' ||
+                               document.getElementById('qq-popup').style.display === 'flex';
+            if (!isInput && !modalVisible) {
+                e.preventDefault();
+                var searchInput = document.getElementById('search-input');
+                searchInput.focus();
+                searchInput.select();
+            }
+        }
+    });
+
+    // 点击搜索框外部关闭搜索历史
+    document.addEventListener('click', function(e) {
+        var wrapper = document.getElementById('search-wrapper');
+        if (wrapper && !wrapper.contains(e.target)) {
+            document.getElementById('search-history-dropdown').classList.remove('visible');
+        }
+    });
 
     // 显示QQ弹窗（在hash处理之后，确保弹窗优先级正确）
     // 但如果正在显示管理员登录，则不弹出QQ弹窗
